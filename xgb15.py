@@ -158,36 +158,48 @@ def get_breakout_ticker(df):
     Returns a DataFrame with one row per ticker, containing the probability
     of the most confident directional class and the corresponding signal.
     """
-    # Engineer features per ticker
-    feature_df = df.groupby("Ticker", group_keys=False).apply(create_features)
-    # Drop rows with NaN (from rolling windows)
-    feature_df = feature_df.replace([np.inf, -np.inf], np.nan).dropna()
-    if feature_df.empty:
+    feature_list = []
+    ticker_list = []
+    
+    # Process each ticker separately (more robust than groupby.apply)
+    for ticker, group in df.groupby("Ticker"):
+        try:
+            feat = create_features(group)
+            # Drop rows with NaN
+            feat = feat.replace([np.inf, -np.inf], np.nan).dropna()
+            if feat.empty:
+                continue
+            feature_list.append(feat)
+            ticker_list.append(ticker)
+        except Exception as e:
+            # If a ticker fails, skip it silently (or log)
+            continue
+    
+    if not feature_list:
         return None
-
+    
+    # Combine all tickers' features
+    feature_df = pd.concat(feature_list, ignore_index=True)
+    
     # The model was trained on mapped labels: -1→0, 0→1, 1→2
-    # We'll keep the original features (excluding Datetime, Ticker, Target)
-    # Target column doesn't exist in new data, so we just exclude Datetime & Ticker
     feature_cols = [c for c in feature_df.columns if c not in ["Datetime","Ticker","Target"]]
     X = feature_df[feature_cols]
-
+    
     # Predict probabilities (class 0,1,2)
     proba = model.predict_proba(X)
-    # proba columns: index 0 = mapped -1 (bearish), index 1 = mapped 0 (neutral), index 2 = mapped 1 (bullish)
-    # Directional confidence = max(prob_bear, prob_bull)
     bear_prob = proba[:, 0]
     bull_prob = proba[:, 2]
     neutral_prob = proba[:, 1]
     max_dir_prob = np.maximum(bear_prob, bull_prob)
     direction = np.where(bull_prob > bear_prob, 1, -1)
-
-    # Create result per ticker (take the most recent row for each ticker)
+    
+    # Add probabilities to feature_df
     feature_df["bull_prob"] = bull_prob
     feature_df["bear_prob"] = bear_prob
     feature_df["max_dir_prob"] = max_dir_prob
     feature_df["direction"] = direction
-
-    # Group by Ticker and get the last row (most recent time)
+    
+    # Get the last row (most recent time) for each ticker
     last_rows = feature_df.groupby("Ticker").last().reset_index()
     return last_rows[["Ticker","bull_prob","bear_prob","max_dir_prob","direction"]]
 
