@@ -55,12 +55,13 @@ def fetch_data(tickers):
 # ============================================================
 def create_features(group):
     group = group.copy()
+    # ✅ Reset index to avoid alignment errors from duplicates/gaps
+    group.reset_index(drop=True, inplace=True)
     
-    # --- defensive: ensure 'Close' is a Series (not a DataFrame) ---
+    # Defensive: ensure 'Close' is a Series (not a DataFrame)
     if isinstance(group['Close'], pd.DataFrame):
         group['Close'] = group['Close'].iloc[:, 0]
-    # ----------------------------------------------------------------
-    
+
     # Basic price features
     group["returns_1"] = group["Close"].pct_change(1)
     group["returns_3"] = group["Close"].pct_change(3)
