@@ -1,1 +1,8 @@
-pip install streamlit yfinance pandas numpy ta scikit-learn xgboost joblib
+streamlit
+yfinance
+pandas
+numpy
+ta
+scikit-learn
+xgboost
+joblib
